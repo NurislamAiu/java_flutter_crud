@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/src/main/resources/firebase-admin-key.json:/app/firebase-admin-key.json
+    networks:
+      - appnet
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8081:80"
+    networks:
+      - appnet
+
+networks:
+  appnet:

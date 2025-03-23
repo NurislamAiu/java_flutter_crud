@@ -1,0 +1,20 @@
+# Java
+/backend/target
+/backend/.idea
+/backend/.classpath
+/backend/.project
+/backend/.settings
+
+# Flutter
+/frontend/.dart_tool/
+/frontend/.idea/
+frontend/.packages
+/frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+
+# General
+.DS_Store
+*.log
+*.json
+.envbackend/src/main/resources/firebase-admin-key.json
