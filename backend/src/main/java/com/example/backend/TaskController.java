@@ -36,10 +36,13 @@ public class TaskController {
         docData.put("completed", taskData.getOrDefault("completed", false));
         docData.put("category", taskData.getOrDefault("category", "Общее"));
         docData.put("createdAt", FieldValue.serverTimestamp());
+        docData.put("deadline", taskData.get("deadline"));
 
         db.collection("tasks").add(docData);
         return "Task created";
     }
+
+
 
 
     @DeleteMapping("/{id}")

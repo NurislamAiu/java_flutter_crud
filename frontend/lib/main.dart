@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() => runApp(TaskApp());
@@ -91,6 +92,7 @@ class _TaskPageState extends State<TaskPage> {
   bool isLoading = false;
   bool isFetching = false;
   String sortBy = 'Date created (newest)';
+  DateTime? selectedDeadline;
 
   final List<String> categories = [
     'General',
@@ -131,29 +133,35 @@ class _TaskPageState extends State<TaskPage> {
       return;
     }
 
+    if (selectedDeadline == null) {
+      showMessage('Please select a deadline');
+      setState(() => isLoading = false);
+      return;
+    }
+
     final body = json.encode({
       'title': title,
       'description': description,
       'completed': isCompleted,
       'category': selectedCategory,
+      'deadline': selectedDeadline!.toIso8601String(),
     });
 
     try {
       final url = editingId == null ? baseUrl : '$baseUrl/$editingId';
       final method = editingId == null ? 'POST' : 'PUT';
 
-      final response =
-          await (method == 'POST'
-              ? http.post(
-                Uri.parse(url),
-                headers: {'Content-Type': 'application/json'},
-                body: body,
-              )
-              : http.put(
-                Uri.parse(url),
-                headers: {'Content-Type': 'application/json'},
-                body: body,
-              ));
+      final response = await (method == 'POST'
+          ? http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      )
+          : http.put(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         showMessage(editingId == null ? 'Task added' : 'Task updated');
@@ -200,6 +208,8 @@ class _TaskPageState extends State<TaskPage> {
       descriptionController.text = task['description'] ?? '';
       isCompleted = task['completed'] ?? false;
       selectedCategory = task['category'] ?? 'General';
+      selectedDeadline =
+          task['deadline'] != null ? DateTime.tryParse(task['deadline']) : null;
     });
   }
 
@@ -227,10 +237,30 @@ class _TaskPageState extends State<TaskPage> {
     final completed = task['completed'] ?? false;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor =
-        completed
-            ? (isDark ? Colors.green[700] : Colors.green[100])
-            : (isDark ? Colors.grey[800] : Colors.white.withOpacity(0.85));
+    final cardColor = completed
+        ? (isDark ? Colors.green[700] : Colors.green[100])
+        : (isDark ? Colors.grey[800] : Colors.white.withOpacity(0.85));
+
+    // 🗓 Deadline logic
+    DateTime? deadline;
+    if (task['deadline'] != null) {
+      deadline = DateTime.tryParse(task['deadline']);
+    }
+
+    final now = DateTime.now();
+    Color? deadlineColor;
+    if (deadline != null) {
+      if (deadline.isBefore(now)) {
+        deadlineColor = Colors.redAccent;
+      } else if (deadline.day == now.day &&
+          deadline.month == now.month &&
+          deadline.year == now.year) {
+        deadlineColor = Colors.amber;
+      } else {
+        deadlineColor = Colors.green;
+      }
+    }
+
     return AnimatedContainer(
       duration: Duration(milliseconds: 300),
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -260,6 +290,17 @@ class _TaskPageState extends State<TaskPage> {
             'Category: ${task['category'] ?? '-'}',
             style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
           ),
+          if (deadline != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Due: ${DateFormat.yMMMd().format(deadline)}',
+                style: TextStyle(
+                  color: deadlineColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -427,6 +468,27 @@ class _TaskPageState extends State<TaskPage> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                    ),
+                    TextButton.icon(
+                      icon: Icon(Icons.calendar_today),
+                      label: Text(
+                        selectedDeadline == null
+                            ? 'Select deadline'
+                            : 'Deadline: ${DateFormat.yMMMd().format(selectedDeadline!)}',
+                      ),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDeadline ?? DateTime.now(),
+                          firstDate: DateTime.now().subtract(
+                            Duration(days: 365),
+                          ),
+                          lastDate: DateTime.now().add(Duration(days: 365 * 5)),
+                        );
+                        if (picked != null) {
+                          setState(() => selectedDeadline = picked);
+                        }
+                      },
                     ),
                     ElevatedButton.icon(
                       icon:
