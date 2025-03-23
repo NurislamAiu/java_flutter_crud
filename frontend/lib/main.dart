@@ -95,6 +95,8 @@ class _TaskPageState extends State<TaskPage> {
   bool isFetching = false;
   String sortBy = 'Date created (newest)';
   DateTime? selectedDeadline;
+  final List<String> priorities = ['Low', 'Medium', 'High'];
+  String selectedPriority = 'Low';
 
   final List<String> categories = [
     'General',
@@ -148,6 +150,7 @@ class _TaskPageState extends State<TaskPage> {
       'completed': isCompleted,
       'category': selectedCategory,
       'deadline': selectedDeadline!.toIso8601String(),
+      'priority': selectedPriority,
     });
 
     try {
@@ -192,16 +195,12 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   Future<void> toggleSubtask(Map task, int index, bool value) async {
-    final List<Map<String, dynamic>> updatedSubtasks =
-    List<Map<String, dynamic>>.from(task['subtasks'] ?? []);
+    final List subtasks = List.from(task['subtasks'] ?? []);
+    if (index >= subtasks.length) return;
 
-    if (index >= updatedSubtasks.length) return;
+    subtasks[index]['done'] = value;
 
-    updatedSubtasks[index]['done'] = value;
-
-    task['subtasks'] = updatedSubtasks;
-
-    final response = await http.put(
+    await http.put(
       Uri.parse('$baseUrl/${task['id']}'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
@@ -210,15 +209,11 @@ class _TaskPageState extends State<TaskPage> {
         'completed': task['completed'],
         'category': task['category'],
         'deadline': task['deadline'],
-        'subtasks': updatedSubtasks,
+        'subtasks': subtasks,
       }),
     );
 
-    if (response.statusCode == 200) {
-      await fetchTasks(); // обязательно перезагрузить после обновления
-    } else {
-      showMessage('Failed to update subtask');
-    }
+    await fetchTasks();
   }
 
   Future<void> toggleCompleted(Map task, bool? value) async {
@@ -235,7 +230,7 @@ class _TaskPageState extends State<TaskPage> {
       }),
     );
 
-    await fetchTasks(); // ← обязательно await!
+    fetchTasks();
   }
 
   void startEditing(Map task) {
@@ -260,6 +255,7 @@ class _TaskPageState extends State<TaskPage> {
       isCompleted = false;
       selectedCategory = 'General';
       editingId = null;
+      selectedPriority = 'Low';
     });
   }
 
@@ -499,160 +495,235 @@ class _TaskPageState extends State<TaskPage> {
                   boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
                 ),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: InputDecoration(
-                        labelText: 'Title',
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                    Text(
+                      'New Task',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: InputDecoration(
-                        labelText: 'Description',
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: subtaskController,
-                      decoration: InputDecoration(
-                        labelText: 'Add subtask',
-                        suffixIcon: IconButton(
-                          icon: Icon(Icons.add),
-                          onPressed: () {
-                            final text = subtaskController.text.trim();
-                            if (text.isNotEmpty) {
-                              setState(() {
-                                subtasks.add({'title': text, 'done': false});
-                                subtaskController.clear();
-                              });
-                            }
-                          },
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-
-                    ...subtasks.map(
-                      (subtask) => ListTile(
-                        dense: true,
-                        title: Text(subtask['title']),
-                        leading: Checkbox(
-                          value: subtask['done'] ?? false,
-                          onChanged: (value) {
-                            setState(() {
-                              subtask['done'] = value;
-                            });
-                          },
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete, color: Colors.redAccent),
-                          onPressed: () {
-                            setState(() {
-                              subtasks.remove(subtask);
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items:
-                          categories
-                              .map(
-                                (cat) => DropdownMenuItem(
-                                  value: cat,
-                                  child: Text(cat),
-                                ),
-                              )
-                              .toList(),
-                      onChanged:
-                          (value) => setState(
-                            () => selectedCategory = value ?? 'General',
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            labelText: 'Title',
+                            filled: true,
+                            fillColor: Theme.of(context).cardColor,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                    ),
-                    CheckboxListTile(
-                      title: Text('Done'),
-                      value: isCompleted,
-                      onChanged:
-                          (value) =>
-                              setState(() => isCompleted = value ?? false),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    TextButton.icon(
-                      icon: Icon(Icons.calendar_today),
-                      label: Text(
-                        selectedDeadline == null
-                            ? 'Select deadline'
-                            : 'Deadline: ${DateFormat.yMMMd().format(selectedDeadline!)}',
-                      ),
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDeadline ?? DateTime.now(),
-                          firstDate: DateTime.now().subtract(
-                            Duration(days: 365),
-                          ),
-                          lastDate: DateTime.now().add(Duration(days: 365 * 5)),
-                        );
-                        if (picked != null) {
-                          setState(() => selectedDeadline = picked);
-                        }
-                      },
-                    ),
-                    ElevatedButton.icon(
-                      icon:
-                          isLoading
-                              ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                              : Icon(Icons.save),
-                      label: Text(editingId == null ? 'Add' : 'Save'),
-                      onPressed: isLoading ? null : submitTask,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        shape: StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 28,
                         ),
-                      ),
+                        SizedBox(height: 12),
+                        TextField(
+                          controller: descriptionController,
+                          decoration: InputDecoration(
+                            labelText: 'Description',
+                            filled: true,
+                            fillColor: Theme.of(context).cardColor,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        TextField(
+                          controller: subtaskController,
+                          decoration: InputDecoration(
+                            labelText: 'Add subtask',
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.add),
+                              onPressed: () {
+                                final text = subtaskController.text.trim();
+                                if (text.isNotEmpty) {
+                                  setState(() {
+                                    subtasks.add({
+                                      'title': text,
+                                      'done': false,
+                                    });
+                                    subtaskController.clear();
+                                  });
+                                }
+                              },
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 8),
+
+                        ...subtasks.map(
+                          (subtask) => ListTile(
+                            dense: true,
+                            title: Text(subtask['title']),
+                            leading: Checkbox(
+                              value: subtask['done'] ?? false,
+                              onChanged: (value) {
+                                setState(() {
+                                  subtask['done'] = value;
+                                });
+                              },
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.redAccent),
+                              onPressed: () {
+                                setState(() {
+                                  subtasks.remove(subtask);
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: selectedCategory,
+                                decoration: InputDecoration(
+                                  labelText: 'Category',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                items:
+                                    categories
+                                        .map(
+                                          (cat) => DropdownMenuItem(
+                                            value: cat,
+                                            child: Text(cat),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged:
+                                    (value) => setState(
+                                      () =>
+                                          selectedCategory = value ?? 'General',
+                                    ),
+                              ),
+                            ),
+                            SizedBox(width: 20),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: selectedPriority,
+                                decoration: InputDecoration(
+                                  labelText: 'Priority',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                items:
+                                    priorities
+                                        .map(
+                                          (level) => DropdownMenuItem(
+                                            value: level,
+                                            child: Text(level),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged:
+                                    (value) => setState(
+                                      () => selectedPriority = value ?? 'Low',
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CheckboxListTile(
+                                title: Text('Done'),
+                                value: isCompleted,
+                                onChanged:
+                                    (value) => setState(
+                                      () => isCompleted = value ?? false,
+                                    ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 20),
+                            Expanded(
+                              child: TextButton.icon(
+                                icon: Icon(Icons.calendar_today),
+                                label: Text(
+                                  selectedDeadline == null
+                                      ? 'Select deadline'
+                                      : 'Deadline: ${DateFormat.yMMMd().format(selectedDeadline!)}',
+                                ),
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate:
+                                        selectedDeadline ?? DateTime.now(),
+                                    firstDate: DateTime.now().subtract(
+                                      Duration(days: 365),
+                                    ),
+                                    lastDate: DateTime.now().add(
+                                      Duration(days: 365 * 5),
+                                    ),
+                                  );
+                                  if (picked != null) {
+                                    setState(() => selectedDeadline = picked);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            icon:
+                                isLoading
+                                    ? SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                    : Icon(
+                                      Icons.save,
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.onBackground,
+                                    ),
+                            label: Text(
+                              editingId == null ? 'Add' : 'Save',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            onPressed: isLoading ? null : submitTask,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(width: 24),
+
             Expanded(
               flex: 2,
               child: Column(

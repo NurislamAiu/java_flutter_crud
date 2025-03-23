@@ -37,6 +37,7 @@ public class TaskController {
         docData.put("completed", taskData.getOrDefault("completed", false));
         docData.put("category", taskData.getOrDefault("category", "Общее"));
         docData.put("createdAt", FieldValue.serverTimestamp());
+        docData.put("priority", taskData.getOrDefault("priority", "Low"));
 
         docData.put("deadline", taskData.get("deadline"));
 
@@ -71,9 +72,17 @@ public class TaskController {
         if (updatedData.containsKey("category")) {
             updates.put("category", updatedData.get("category"));
         }
-
         if (updatedData.containsKey("subtasks")) {
             updates.put("subtasks", updatedData.get("subtasks"));
+        }
+        if (updatedData.containsKey("order")) {
+            updates.put("order", updatedData.get("order"));
+        }
+        if (updatedData.containsKey("deadline")) {
+            updates.put("deadline", updatedData.get("deadline"));
+        }
+        if (updatedData.containsKey("priority")) {
+            updates.put("priority", updatedData.get("priority"));
         }
 
         docRef.update(updates);
