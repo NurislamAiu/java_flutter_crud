@@ -12,6 +12,8 @@ services:
     build: ./frontend
     ports:
       - "8081:80"
+    volumes:
+      - ./frontend/build/web:/usr/share/nginx/html:ro
     networks:
       - appnet
 

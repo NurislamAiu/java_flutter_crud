@@ -41,6 +41,7 @@ public class TaskController {
         return "Task created";
     }
 
+
     @DeleteMapping("/{id}")
     public String deleteTask(@PathVariable String id) throws ExecutionException, InterruptedException {
         db.collection("tasks").document(id).delete();
