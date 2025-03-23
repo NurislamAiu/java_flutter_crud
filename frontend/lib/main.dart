@@ -85,7 +85,9 @@ class TaskPage extends StatefulWidget {
 
 class _TaskPageState extends State<TaskPage> {
   List tasks = [];
+  List<Map<String, dynamic>> subtasks = [];
   final titleController = TextEditingController();
+  final subtaskController = TextEditingController();
   final descriptionController = TextEditingController();
   bool isCompleted = false;
   String? editingId;
@@ -142,6 +144,7 @@ class _TaskPageState extends State<TaskPage> {
     final body = json.encode({
       'title': title,
       'description': description,
+      'subtasks': subtasks,
       'completed': isCompleted,
       'category': selectedCategory,
       'deadline': selectedDeadline!.toIso8601String(),
@@ -151,17 +154,18 @@ class _TaskPageState extends State<TaskPage> {
       final url = editingId == null ? baseUrl : '$baseUrl/$editingId';
       final method = editingId == null ? 'POST' : 'PUT';
 
-      final response = await (method == 'POST'
-          ? http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      )
-          : http.put(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ));
+      final response =
+          await (method == 'POST'
+              ? http.post(
+                Uri.parse(url),
+                headers: {'Content-Type': 'application/json'},
+                body: body,
+              )
+              : http.put(
+                Uri.parse(url),
+                headers: {'Content-Type': 'application/json'},
+                body: body,
+              ));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         showMessage(editingId == null ? 'Task added' : 'Task updated');
@@ -187,6 +191,36 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
+  Future<void> toggleSubtask(Map task, int index, bool value) async {
+    final List<Map<String, dynamic>> updatedSubtasks =
+    List<Map<String, dynamic>>.from(task['subtasks'] ?? []);
+
+    if (index >= updatedSubtasks.length) return;
+
+    updatedSubtasks[index]['done'] = value;
+
+    task['subtasks'] = updatedSubtasks;
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/${task['id']}'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'title': task['title'],
+        'description': task['description'],
+        'completed': task['completed'],
+        'category': task['category'],
+        'deadline': task['deadline'],
+        'subtasks': updatedSubtasks,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      await fetchTasks(); // обязательно перезагрузить после обновления
+    } else {
+      showMessage('Failed to update subtask');
+    }
+  }
+
   Future<void> toggleCompleted(Map task, bool? value) async {
     await http.put(
       Uri.parse('$baseUrl/${task['id']}'),
@@ -196,9 +230,12 @@ class _TaskPageState extends State<TaskPage> {
         'description': task['description'],
         'completed': value ?? false,
         'category': task['category'],
+        'deadline': task['deadline'],
+        'subtasks': task['subtasks'],
       }),
     );
-    fetchTasks();
+
+    await fetchTasks(); // ← обязательно await!
   }
 
   void startEditing(Map task) {
@@ -206,6 +243,7 @@ class _TaskPageState extends State<TaskPage> {
       editingId = task['id'];
       titleController.text = task['title'] ?? '';
       descriptionController.text = task['description'] ?? '';
+      subtasks = List<Map<String, dynamic>>.from(task['subtasks'] ?? []);
       isCompleted = task['completed'] ?? false;
       selectedCategory = task['category'] ?? 'General';
       selectedDeadline =
@@ -215,8 +253,10 @@ class _TaskPageState extends State<TaskPage> {
 
   void resetForm() {
     setState(() {
+      subtasks = [];
       titleController.clear();
       descriptionController.clear();
+      subtaskController.clear();
       isCompleted = false;
       selectedCategory = 'General';
       editingId = null;
@@ -237,11 +277,11 @@ class _TaskPageState extends State<TaskPage> {
     final completed = task['completed'] ?? false;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor = completed
-        ? (isDark ? Colors.green[700] : Colors.green[100])
-        : (isDark ? Colors.grey[800] : Colors.white.withOpacity(0.85));
+    final cardColor =
+        completed
+            ? (isDark ? Colors.green[700] : Colors.green[100])
+            : (isDark ? Colors.grey[800] : Colors.white.withOpacity(0.85));
 
-    // 🗓 Deadline logic
     DateTime? deadline;
     if (task['deadline'] != null) {
       deadline = DateTime.tryParse(task['deadline']);
@@ -260,6 +300,8 @@ class _TaskPageState extends State<TaskPage> {
         deadlineColor = Colors.green;
       }
     }
+
+    final List subtasks = task['subtasks'] ?? [];
 
     return AnimatedContainer(
       duration: Duration(milliseconds: 300),
@@ -297,8 +339,54 @@ class _TaskPageState extends State<TaskPage> {
                 'Due: ${DateFormat.yMMMd().format(deadline)}',
                 style: TextStyle(
                   color: deadlineColor,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
+              ),
+            ),
+          if (subtasks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(subtasks.length, (index) {
+                  final subtask = subtasks[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8.0, bottom: 4.0),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: subtask['done'] == true,
+                          onChanged: (value) {
+                            toggleSubtask(task, index, value ?? false);
+                          },
+                          visualDensity: VisualDensity.compact,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          side: BorderSide(
+                            color: Colors.teal.withOpacity(0.6),
+                            width: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            subtask['title'] ?? '',
+                            style: TextStyle(
+                              fontSize: 13,
+                              decoration:
+                                  subtask['done'] == true
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                              color:
+                                  subtask['done'] == true ? Colors.grey : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ),
             ),
           const SizedBox(height: 8),
@@ -432,6 +520,53 @@ class _TaskPageState extends State<TaskPage> {
                         fillColor: Theme.of(context).cardColor,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: subtaskController,
+                      decoration: InputDecoration(
+                        labelText: 'Add subtask',
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.add),
+                          onPressed: () {
+                            final text = subtaskController.text.trim();
+                            if (text.isNotEmpty) {
+                              setState(() {
+                                subtasks.add({'title': text, 'done': false});
+                                subtaskController.clear();
+                              });
+                            }
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+
+                    ...subtasks.map(
+                      (subtask) => ListTile(
+                        dense: true,
+                        title: Text(subtask['title']),
+                        leading: Checkbox(
+                          value: subtask['done'] ?? false,
+                          onChanged: (value) {
+                            setState(() {
+                              subtask['done'] = value;
+                            });
+                          },
+                        ),
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () {
+                            setState(() {
+                              subtasks.remove(subtask);
+                            });
+                          },
                         ),
                       ),
                     ),
@@ -589,7 +724,7 @@ class _TaskPageState extends State<TaskPage> {
                             : filteredTasks.isEmpty
                             ? Center(child: Text('No tasks found'))
                             : ListView.builder(
-                              itemCount: filteredTasks.length,
+                              itemCount: sortedTasks.length,
                               itemBuilder:
                                   (context, index) =>
                                       buildTaskCard(sortedTasks[index]),

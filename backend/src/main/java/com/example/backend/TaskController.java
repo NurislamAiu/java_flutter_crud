@@ -33,9 +33,11 @@ public class TaskController {
         Map<String, Object> docData = new HashMap<>();
         docData.put("title", taskData.get("title"));
         docData.put("description", taskData.get("description"));
+        docData.put("subtasks", taskData.get("subtasks"));
         docData.put("completed", taskData.getOrDefault("completed", false));
         docData.put("category", taskData.getOrDefault("category", "Общее"));
         docData.put("createdAt", FieldValue.serverTimestamp());
+
         docData.put("deadline", taskData.get("deadline"));
 
         db.collection("tasks").add(docData);
@@ -68,6 +70,10 @@ public class TaskController {
         }
         if (updatedData.containsKey("category")) {
             updates.put("category", updatedData.get("category"));
+        }
+
+        if (updatedData.containsKey("subtasks")) {
+            updates.put("subtasks", updatedData.get("subtasks"));
         }
 
         docRef.update(updates);
